@@ -19,8 +19,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
   const [mockName, setMockName] = useState('Sahil Sepat');
   const [mockPhone, setMockPhone] = useState('+91 98765 43210');
 
-  if (!isOpen) return null;
-
   // DYNAMIC SCRIPT INJECTION: Load Truecaller Web SDK CDN Script
   useEffect(() => {
     if (isSandbox) {
