@@ -1,25 +1,127 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, MessageSquare, PhoneCall, ArrowRight, Smartphone, Check, Loader2 } from 'lucide-react';
+import { ShieldCheck, MessageSquare, ArrowRight, Smartphone, Check, Loader2, Settings, Info } from 'lucide-react';
 
 export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
   const [method, setMethod] = useState(null); // null | 'truecaller' | 'otp'
   const [phoneInput, setPhoneInput] = useState('');
   const [otpInput, setOtpInput] = useState(['', '', '', '']);
-  const [loadingStep, setLoadingStep] = useState(0); // 0: idle, 1: loading, 2: OTP sent, 3: verifying, 4: success
+  const [loadingStep, setLoadingStep] = useState(0); // 0: idle, 1: loading, 2: loaded, 3: verifying, 4: success
   const [loadingText, setLoadingText] = useState('');
+  
+  // Developer Sandbox Settings
+  const [isSandbox, setIsSandbox] = useState(true); // Default to Sandbox simulator so Vercel never crashes
+  const [partnerKey, setPartnerKey] = useState('gdd_dummy_partner_key_1092');
+  const [showDevSettings, setShowDevSettings] = useState(false);
+  const [sdkStatus, setSdkStatus] = useState('Not Loaded');
 
   if (!isOpen) return null;
 
-  // Truecaller Verification simulation sequence
-  const startTruecallerVerification = () => {
-    setMethod('truecaller');
-    setLoadingStep(1);
-    setLoadingText('Connecting to Truecaller Secure Gateway...');
+  // DYNAMIC SCRIPT INJECTION: Load Truecaller Web SDK CDN Script
+  useEffect(() => {
+    if (isSandbox) {
+      setSdkStatus('Simulator Mode Active');
+      return;
+    }
+
+    setSdkStatus('Loading SDK...');
+    const existingScript = document.getElementById('truecaller-sdk-script');
     
-    // Simulate SDK loading state
-    setTimeout(() => {
-      setLoadingStep(2); // Display Slide-up verification card
-    }, 1200);
+    if (existingScript) {
+      initTruecallerSDK();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'truecaller-sdk-script';
+    script.src = 'https://one-tap-sdk-web.truecaller.com/v1.0/sdk.js';
+    script.async = true;
+    script.onload = () => {
+      setSdkStatus('Loaded successfully');
+      initTruecallerSDK();
+    };
+    script.onerror = () => {
+      setSdkStatus('Failed to load. Blocked by origin.');
+      console.warn('Truecaller SDK script failed to load. Falling back to Sandbox simulator.');
+    };
+
+    document.body.appendChild(script);
+
+    return () => {
+      // Keep script cached but reset if needed
+    };
+  }, [isSandbox]);
+
+  // INITIALIZE THE OFFICIAL TRUECALLER SDK API
+  const initTruecallerSDK = () => {
+    try {
+      if (window.Truecaller) {
+        window.Truecaller.init({
+          partnerKey: partnerKey,
+          partnerName: 'Ganga Dudh Dairy',
+          buttonStyle: 'ROUNDED',
+          buttonColor: '#2575fc',
+          buttonTextColor: '#ffffff',
+          loginState: 'LOG_IN',
+          onVerificationSuccess: (profile) => {
+            setLoadingStep(4);
+            setTimeout(() => {
+              onLoginSuccess({
+                name: profile.firstName + ' ' + (profile.lastName || ''),
+                phone: profile.phoneNumber
+              });
+              onClose();
+            }, 800);
+          },
+          onVerificationFailed: (error) => {
+            console.error('Truecaller SDK Verification Failed:', error);
+            setLoadingStep(0);
+            setMethod(null);
+            alert(`SDK Error: ${error.message || 'Verification aborted'}. Falling back to Sandbox.`);
+            setIsSandbox(true); // Auto-fallback to Sandbox
+          }
+        });
+        setSdkStatus('Initialized & Ready');
+      }
+    } catch (err) {
+      setSdkStatus('Init Error: ' + err.message);
+      console.error('Truecaller Init Error:', err);
+    }
+  };
+
+  // Truecaller Verification Flow Trigger
+  const handleTruecallerLogin = () => {
+    setMethod('truecaller');
+
+    if (isSandbox) {
+      // 1. SIMULATION FLOW: Slides up our custom beautiful permission drawer
+      setLoadingStep(1);
+      setLoadingText('Connecting to Truecaller Secure Gateway...');
+      setTimeout(() => {
+        setLoadingStep(2); // Display Slide-up verification card
+      }, 1200);
+    } else {
+      // 2. LIVE PRODUCTION SDK API FLOW
+      if (!window.Truecaller) {
+        alert('Truecaller SDK is not loaded yet or blocked by domain. Bypassing to Sandbox Mode.');
+        setIsSandbox(true);
+        setLoadingStep(1);
+        setLoadingText('Connecting to Sandbox Simulator...');
+        setTimeout(() => setLoadingStep(2), 1000);
+        return;
+      }
+      
+      setLoadingStep(1);
+      setLoadingText('Triggering Truecaller One-Tap Web SDK...');
+      
+      try {
+        // Officially trigger the Truecaller One-Tap flow
+        window.Truecaller.triggerOneTap();
+      } catch (err) {
+        alert('Truecaller triggerOneTap failed due to Domain mismatch on localhost. Auto-bypassing to Sandbox.');
+        setIsSandbox(true);
+        setLoadingStep(2);
+      }
+    }
   };
 
   const handleTruecallerConfirm = () => {
@@ -59,8 +161,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
     setTimeout(() => {
       setLoadingStep(2); // Enter OTP state
       setLoadingText('OTP sent to ' + phoneInput);
-      
-      // Simulate auto-fill OTP after 1.5s
       setTimeout(() => {
         setOtpInput(['4', '8', '9', '2']);
       }, 1500);
@@ -76,7 +176,7 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         setLoadingStep(4);
         setTimeout(() => {
           onLoginSuccess({
-            name: 'Sahil Sepat', // Default mock user name
+            name: 'Sahil Sepat',
             phone: phoneInput.startsWith('+91') ? phoneInput : `+91 ${phoneInput}`
           });
           onClose();
@@ -94,7 +194,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
     nextOtp[index] = value;
     setOtpInput(nextOtp);
 
-    // Auto-focus next input field
     if (value && index < 3) {
       document.getElementById(`otp-input-${index + 1}`).focus();
     }
@@ -102,39 +201,115 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
 
   return (
     <div className="login-overlay" onClick={onClose}>
-      <div className="login-dialog glass-card animate-scale" onClick={(e) => e.stopPropagation()}>
+      <div className="login-dialog zomato-login-card animate-scale" onClick={(e) => e.stopPropagation()}>
         
-        {/* Main Landing Menu */}
-        {method === null && (
-          <div className="login-menu-view">
-            <span className="login-avatar-logo">🥛</span>
-            <h3>Welcome to Ganga Dudh</h3>
-            <p className="login-subtitle">Unlock farm-fresh morning deliveries and earn loyalty points.</p>
+        {/* Sandbox Dev Settings Toggler */}
+        <button 
+          onClick={() => setShowDevSettings(!showDevSettings)} 
+          className="dev-settings-btn"
+          title="Truecaller API Sandbox Configurator"
+        >
+          <Settings size={18} />
+        </button>
 
-            {/* Truecaller Main Button */}
-            <button 
-              onClick={startTruecallerVerification} 
-              className="btn btn-truecaller pulse-truecaller w-full"
-            >
-              <ShieldCheck size={20} />
-              <span>Verify Instantly via Truecaller</span>
-            </button>
+        {/* Developer settings pane */}
+        {showDevSettings && (
+          <div className="dev-settings-pane bg-light-panel animate-scale">
+            <h5>⚙️ Truecaller API Sandbox</h5>
+            <div className="dev-row">
+              <label>SDK Load Status:</label>
+              <strong className={sdkStatus.includes('Ready') || sdkStatus.includes('Active') ? 'text-green' : 'text-red'}>
+                {sdkStatus}
+              </strong>
+            </div>
+            <div className="dev-row">
+              <label>Partner Key:</label>
+              <input 
+                type="text" 
+                value={partnerKey} 
+                onChange={(e) => setPartnerKey(e.target.value)} 
+                className="dev-input"
+              />
+            </div>
+            <div className="dev-row flex-row-between">
+              <label>Bypass Domain Locks (Sandbox):</label>
+              <label className="switch">
+                <input 
+                  type="checkbox" 
+                  checked={isSandbox}
+                  onChange={(e) => {
+                    setIsSandbox(e.target.checked);
+                    setLoadingStep(0);
+                    setMethod(null);
+                  }}
+                />
+                <span className="slider"></span>
+              </label>
+            </div>
+            <div className="dev-info">
+              <Info size={12} />
+              <span>Truecaller's live API restricts domain origins. Keep <strong>Sandbox ON</strong> to showcase a flawless verification demo on Vercel without key mismatches!</span>
+            </div>
+          </div>
+        )}
+
+        {/* ZOMATO INSPIRED LOGIN VIEW */}
+        {method === null && (
+          <div className="zomato-login-menu">
+            {/* Header logo & welcome */}
+            <div className="zomato-header-logo">
+              <div className="logo-milk-bottle">🥛</div>
+              <div className="zomato-glow-ring"></div>
+            </div>
+            <h3>Ganga Dudh Dairy</h3>
+            <p className="login-subtitle">Jaipur's Purest Milk items • Delivered fresh in 5-6 km</p>
+            
+            <h4 className="zomato-login-title">Login or Signup</h4>
+
+            {/* ZOMATO-STYLE PHONE NUMBER INPUT FORM */}
+            <form onSubmit={handleSendOtp} className="zomato-phone-form">
+              <div className="zomato-input-wrapper">
+                {/* 🇮🇳 Country Flag Prefix Dropdown */}
+                <div className="country-flag-selector">
+                  <span className="flag-icon">🇮🇳</span>
+                  <span className="prefix-num">+91</span>
+                  <span className="divider-line">|</span>
+                </div>
+                <input
+                  type="tel"
+                  maxLength="10"
+                  required
+                  placeholder="Enter Mobile Number"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, ''))}
+                  className="zomato-phone-input"
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-zomato-red w-full">
+                <span>Send One-Time Password</span>
+                <ArrowRight size={16} />
+              </button>
+            </form>
 
             <div className="login-divider">
-              <span>OR</span>
+              <span>or</span>
             </div>
 
-            {/* OTP Fallback Trigger */}
+            {/* ZOMATO-STYLE TRUECALLER INTEGRATION BUTTON */}
             <button 
-              onClick={startOtpFlow} 
-              className="btn btn-secondary w-full"
+              onClick={handleTruecallerLogin} 
+              className="btn btn-zomato-truecaller pulse-truecaller w-full"
             >
-              <Smartphone size={18} />
-              <span>Login with Mobile Number</span>
+              <div className="tc-btn-inner">
+                <span className="tc-btn-icon">🛡️</span>
+                <span>Continue as Sahil Sepat</span>
+              </div>
+              <span className="verified-badge-zomato">Verified</span>
             </button>
 
             <p className="login-privacy-policy">
-              By logging in, you agree to Ganga Dudh Dairy's Terms of Service and Privacy Policy. FSSAI Licensed.
+              By continuing, you agree to our **Terms of Service** and **Privacy Policy**. All standard SMS charges apply.
             </p>
           </div>
         )}
@@ -142,7 +317,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         {/* METHOD A: TRUECALLER FLOW */}
         {method === 'truecaller' && (
           <div className="truecaller-view">
-            {/* Loading/Decryption Phase */}
             {(loadingStep === 1 || loadingStep === 3) && (
               <div className="loading-canvas">
                 <Loader2 size={40} className="spinner text-truecaller-color" />
@@ -209,35 +383,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
               ← Back
             </button>
 
-            {loadingStep === 0 && (
-              <form onSubmit={handleSendOtp} className="phone-form">
-                <Smartphone size={32} className="text-primary-color" style={{ margin: '0 auto 12px auto', display: 'block' }} />
-                <h3>Enter Mobile Number</h3>
-                <p className="login-subtitle">We will send a 4-digit verification code via SMS.</p>
-                
-                <div className="input-group" style={{ margin: '16px 0' }}>
-                  <div className="phone-prefix-input">
-                    <span className="prefix-lbl">+91</span>
-                    <input
-                      type="tel"
-                      maxLength="10"
-                      required
-                      placeholder="98290 XXXXX"
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, ''))}
-                      className="custom-input-check"
-                      style={{ paddingLeft: '48px' }}
-                    />
-                  </div>
-                </div>
-
-                <button type="submit" className="btn btn-primary w-full">
-                  <span>Send One-Time Password</span>
-                  <ArrowRight size={16} />
-                </button>
-              </form>
-            )}
-
             {loadingStep === 1 && (
               <div className="loading-canvas">
                 <Loader2 size={40} className="spinner text-primary-color" />
@@ -270,7 +415,7 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
                 <button 
                   onClick={handleVerifyOtp}
                   disabled={otpInput.some(d => !d)}
-                  className="btn btn-primary w-full"
+                  className="btn btn-primary w-full btn-zomato-red"
                   style={{ marginTop: '16px' }}
                 >
                   Verify & Log In
@@ -306,99 +451,265 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(0, 0, 0, 0.55);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
           z-index: 20000;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 16px;
         }
-        .login-dialog {
+        
+        /* ZOMATO THEMED CARD */
+        .zomato-login-card {
           width: 100%;
-          max-width: 420px;
+          max-width: 440px;
           background: var(--bg-card);
-          border-radius: var(--radius-lg);
-          padding: 32px 24px;
-          box-shadow: var(--shadow-lg);
+          border-radius: 20px;
+          padding: 36px 28px;
+          box-shadow: 0 24px 64px rgba(0, 0, 0, 0.16);
           position: relative;
+          border: 1px solid var(--border-color);
         }
-        .animate-scale {
-          animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        @keyframes scaleUp {
-          from { transform: scale(0.9); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
-        }
-        .login-avatar-logo {
-          font-size: 4rem;
-          display: block;
-          text-align: center;
-          margin-bottom: 16px;
-        }
-        .login-menu-view {
-          text-align: center;
-        }
-        .login-menu-view h3 {
-          font-size: 1.5rem;
-          font-weight: 800;
-          margin-bottom: 6px;
-        }
-        .login-subtitle {
+
+        /* Developer Settings Panel */
+        .dev-settings-btn {
+          position: absolute;
+          top: 20px;
+          right: 20px;
           color: var(--text-secondary);
-          font-size: 0.85rem;
-          margin-bottom: 24px;
-          line-height: 1.4;
+          opacity: 0.6;
+          transition: all 0.2s;
         }
-        .btn-truecaller {
-          background: #2575fc;
+        .dev-settings-btn:hover {
+          opacity: 1;
+          transform: rotate(45deg);
+        }
+        .dev-settings-pane {
+          position: absolute;
+          top: 64px;
+          left: 20px;
+          right: 20px;
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-color);
+          border-radius: var(--radius-md);
+          padding: 16px;
+          z-index: 10;
+          box-shadow: var(--shadow-md);
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .dev-settings-pane h5 {
+          font-size: 0.95rem;
+          font-weight: 700;
+          border-bottom: 1px solid var(--border-color);
+          padding-bottom: 6px;
+        }
+        .dev-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.75rem;
+        }
+        .dev-input {
+          padding: 4px 8px;
+          border-radius: 4px;
+          border: 1px solid var(--border-color);
+          background: var(--bg-card);
+          color: var(--text-primary);
+          width: 60%;
+        }
+        .dev-info {
+          display: flex;
+          gap: 8px;
+          font-size: 0.65rem;
+          color: var(--text-secondary);
+          line-height: 1.35;
+          padding-top: 6px;
+          border-top: 1px dashed var(--border-color);
+        }
+
+        .zomato-login-menu {
+          text-align: center;
+        }
+        .zomato-header-logo {
+          position: relative;
+          width: 80px;
+          height: 80px;
+          margin: 0 auto 16px auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--bg-secondary);
+          border-radius: 50%;
+          box-shadow: var(--shadow-sm);
+        }
+        .logo-milk-bottle {
+          font-size: 3rem;
+          z-index: 2;
+        }
+        .zomato-glow-ring {
+          position: absolute;
+          width: 90%;
+          height: 90%;
+          border: 2px dashed var(--primary-milk);
+          border-radius: 50%;
+          animation: spin 12s linear infinite;
+        }
+        .zomato-login-menu h3 {
+          font-size: 1.45rem;
+          font-weight: 800;
+          background: linear-gradient(135deg, var(--text-primary), var(--primary-milk));
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        .zomato-login-title {
+          font-size: 1.2rem;
+          font-weight: 800;
+          margin: 28px 0 16px 0;
+          text-align: left;
+          letter-spacing: -0.01em;
+        }
+
+        /* ZOMATO SPECIFIC PHONE ENTRY */
+        .zomato-phone-form {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .zomato-input-wrapper {
+          display: flex;
+          align-items: center;
+          border: 1px solid var(--border-color);
+          border-radius: 12px;
+          background: var(--bg-input);
+          padding: 4px 12px;
+          height: 52px;
+          transition: border-color 0.2s;
+        }
+        .zomato-input-wrapper:focus-within {
+          border-color: var(--primary-milk);
+          background: var(--bg-card);
+          box-shadow: 0 0 0 4px rgba(var(--primary-milk-rgb), 0.08);
+        }
+        .country-flag-selector {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 1rem;
+          font-weight: 700;
+          color: var(--text-primary);
+        }
+        .divider-line {
+          color: var(--border-color);
+          margin-left: 4px;
+        }
+        .zomato-phone-input {
+          flex-grow: 1;
+          border: none;
+          background: transparent;
+          font-size: 1rem;
+          font-weight: 600;
+          color: var(--text-primary);
+          padding-left: 10px;
+        }
+        .btn-zomato-red {
+          background: linear-gradient(135deg, #e11d48, #be123c); /* Zomato classic red gradient */
           color: white;
-          border-radius: var(--radius-pill);
+          border-radius: 12px;
           height: 48px;
           font-weight: 700;
-          font-size: 0.95rem;
-          box-shadow: 0 4px 14px rgba(37, 117, 252, 0.3);
+          box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25);
         }
-        .btn-truecaller:hover {
-          background: #1a61db;
+        .btn-zomato-red:hover {
+          background: linear-gradient(135deg, #be123c, #9f1239);
           transform: translateY(-1px);
         }
-        .text-truecaller-color {
-          color: #2575fc;
-        }
-        @keyframes tcPulse {
-          0% { box-shadow: 0 0 0 0 rgba(37, 117, 252, 0.5); }
-          70% { box-shadow: 0 0 0 10px rgba(37, 117, 252, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(37, 117, 252, 0); }
-        }
-        .pulse-truecaller {
-          animation: tcPulse 2.5s infinite;
-        }
+
         .login-divider {
           display: flex;
           align-items: center;
           text-align: center;
-          margin: 20px 0;
+          margin: 24px 0;
           color: var(--text-secondary);
-          font-size: 0.75rem;
-          font-weight: 700;
+          font-size: 0.8rem;
+          font-weight: 500;
         }
         .login-divider::before, .login-divider::after {
           content: '';
           flex: 1;
           border-bottom: 1px solid var(--border-color);
         }
-        .login-divider:not(:empty)::before { margin-right: 12px; }
-        .login-divider:not(:empty)::after { margin-left: 12px; }
-        .login-privacy-policy {
+        .login-divider:not(:empty)::before { margin-right: 16px; }
+        .login-divider:not(:empty)::after { margin-left: 16px; }
+
+        /* ZOMATO TRUECALLER BUTTON BUTTON */
+        .btn-zomato-truecaller {
+          background: #ffffff;
+          border: 1px solid #2575fc;
+          color: #2575fc;
+          border-radius: 12px;
+          height: 52px;
+          font-weight: 700;
+          font-size: 0.95rem;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0 20px;
+          transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(37, 117, 252, 0.05);
+        }
+        [data-theme="dark"] .btn-zomato-truecaller {
+          background: var(--bg-secondary);
+          border-color: #2575fc;
+        }
+        .btn-zomato-truecaller:hover {
+          background: #2575fc;
+          color: white !important;
+          box-shadow: 0 4px 16px rgba(37, 117, 252, 0.3);
+          transform: translateY(-1px);
+        }
+        .tc-btn-inner {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .tc-btn-icon {
+          font-size: 1.15rem;
+        }
+        .verified-badge-zomato {
+          background: #dbeafe;
+          color: #1e40af;
           font-size: 0.65rem;
-          color: var(--text-secondary);
-          margin-top: 20px;
-          line-height: 1.4;
+          font-weight: 800;
+          padding: 2px 8px;
+          border-radius: 6px;
+          text-transform: uppercase;
+        }
+        .btn-zomato-truecaller:hover .verified-badge-zomato {
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+        }
+        
+        .pulse-truecaller {
+          animation: tcPulse 3s infinite;
+        }
+        @keyframes tcPulse {
+          0% { box-shadow: 0 0 0 0 rgba(37, 117, 252, 0.15); }
+          70% { box-shadow: 0 0 0 10px rgba(37, 117, 252, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(37, 117, 252, 0); }
         }
 
-        /* Truecaller SDK Simulated Modal Sheet */
+        .login-privacy-policy {
+          font-size: 0.7rem;
+          color: var(--text-secondary);
+          margin-top: 24px;
+          line-height: 1.45;
+        }
+
+        /* Truecaller SDK Simulated Drawer */
         .truecaller-drawer-sim {
           background: var(--bg-secondary);
           border: 1px solid var(--border-color);
@@ -525,9 +836,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         .spinner {
           animation: spin 1s linear infinite;
         }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
 
         .success-canvas {
           text-align: center;
@@ -565,22 +873,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         .back-to-menu-btn:hover {
           text-decoration: underline;
         }
-        .phone-form {
-          text-align: center;
-          padding-top: 16px;
-        }
-        .phone-prefix-input {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-        .prefix-lbl {
-          position: absolute;
-          left: 12px;
-          font-weight: 700;
-          font-size: 0.95rem;
-          color: var(--text-secondary);
-        }
         .sim-hint {
           background: var(--ghee-gold-light);
           color: var(--ghee-gold);
@@ -616,6 +908,25 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         .otp-verification-screen {
           text-align: center;
           padding-top: 16px;
+        }
+
+        @media(max-width: 768px) {
+          .zomato-login-card {
+            padding: 28px 20px;
+            border-radius: 20px 20px 0 0 !important;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 20002;
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.25);
+            animation: slideUpShort 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          .truecaller-drawer-sim {
+            border: none !important;
+            position: relative !important;
+            box-shadow: none !important;
+          }
         }
       `}</style>
     </div>
