@@ -14,7 +14,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
   const [showDevSettings, setShowDevSettings] = useState(false);
   const [sdkStatus, setSdkStatus] = useState('Not Loaded');
 
-  if (!isOpen) return null;
 
   // DYNAMIC SCRIPT INJECTION: Load Truecaller Web SDK CDN Script
   useEffect(() => {
@@ -198,6 +197,8 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
       document.getElementById(`otp-input-${index + 1}`).focus();
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="login-overlay" onClick={onClose}>
