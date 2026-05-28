@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SHOPS, getDistanceKm } from '../utils/geo';
-import { getDBData, setDBData } from '../utils/db';
+import { getDBData, setDBData, getAllOrders, updateGlobalOrderStatus } from '../utils/db';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import { Package, ShieldAlert, Truck, ChevronRight, CheckCircle2, TrendingUp, DollarSign } from 'lucide-react';
 import L from 'leaflet';
@@ -39,12 +39,20 @@ function AdminMapFocus({ lat, lng }) {
   return null;
 }
 
-export default function ShopkeeperPortal({ orders, setOrders, inventory, setInventory }) {
+export default function ShopkeeperPortal({ inventory, setInventory }) {
   const [selectedBranchId, setSelectedBranchId] = useState('vaishali');
   const activeBranchObj = SHOPS.find(s => s.id === selectedBranchId);
 
+  // Local state holding global orders
+  const [localOrders, setLocalOrders] = useState(() => getAllOrders());
+
+  // Periodically refresh orders when tab is focused
+  useEffect(() => {
+    setLocalOrders(getAllOrders());
+  }, []);
+
   // Filter orders for selected branch
-  const branchOrders = orders.filter(o => o.branchId === selectedBranchId);
+  const branchOrders = localOrders.filter(o => o.branchId === selectedBranchId);
   const activeDeliveries = branchOrders.filter(o => o.status !== 'Delivered');
 
   // Modify stock level manually (Simulating supplier replenishment)
@@ -63,15 +71,11 @@ export default function ShopkeeperPortal({ orders, setOrders, inventory, setInve
     if (currentStatus === 'Preparing') nextStatus = 'Out for Delivery';
     if (currentStatus === 'Out for Delivery') nextStatus = 'Delivered';
 
-    const updatedOrders = orders.map((o) => {
-      if (o.id === orderId) {
-        return { ...o, status: nextStatus };
-      }
-      return o;
-    });
+    // Update relational database schema inside the customer's record
+    updateGlobalOrderStatus(orderId, nextStatus);
 
-    setOrders(updatedOrders);
-    setDBData('orders', updatedOrders);
+    // Refresh local state list
+    setLocalOrders(getAllOrders());
   };
 
   // Compute total sales metrics for the branch

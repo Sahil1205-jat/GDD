@@ -8,7 +8,8 @@ export default function CheckoutWizard({
   userCoords,
   nearestShop,
   onOrderSuccess, 
-  onCancel 
+  onCancel,
+  user
 }) {
   const [step, setStep] = useState(1);
   const [addressDetails, setAddressDetails] = useState(userAddress || '');
@@ -16,8 +17,15 @@ export default function CheckoutWizard({
   const [paymentMethod, setPaymentMethod] = useState('upi'); // upi | card | cod
   const [isSimulating, setIsSimulating] = useState(false);
   const [upiTimer, setUpiTimer] = useState(120); // 2 minute countdown
-  const [phone, setPhone] = useState('+91 98765 43210');
-  const [name, setName] = useState('Sahil Sepat');
+  const [phone, setPhone] = useState(user?.phone || '+91 98765 43210');
+  const [name, setName] = useState(user?.name || 'Sahil Sepat');
+
+  useEffect(() => {
+    if (user) {
+      setName(user.name || '');
+      setPhone(user.phone || '');
+    }
+  }, [user]);
 
   // Calculates billing
   const isSubscription = !!subscriptionOrder;

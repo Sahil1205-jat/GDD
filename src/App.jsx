@@ -486,6 +486,7 @@ export default function App() {
               nearestShop={eligibility?.nearestShop}
               onOrderSuccess={handleOrderSuccess}
               onCancel={() => setView('store')}
+              user={user}
             />
           </section>
         )}
