@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, MessageSquare, ArrowRight, Smartphone, Check, Loader2, Settings, Info } from 'lucide-react';
+import { ShieldCheck, MessageSquare, ArrowRight, Smartphone, Check, Loader2, Settings, Info, User } from 'lucide-react';
 
 export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
   const [method, setMethod] = useState(null); // null | 'truecaller' | 'otp'
+  const [nameInput, setNameInput] = useState(''); // Custom Name registration input
   const [phoneInput, setPhoneInput] = useState('');
   const [otpInput, setOtpInput] = useState(['', '', '', '']);
   const [loadingStep, setLoadingStep] = useState(0); // 0: idle, 1: loading, 2: loaded, 3: verifying, 4: success
   const [loadingText, setLoadingText] = useState('');
   
-  // Developer Sandbox Settings
-  const [isSandbox, setIsSandbox] = useState(true); // Default to Sandbox simulator so Vercel never crashes
+  // Developer Sandbox Settings - Fully Customizable Mock Profile!
+  const [isSandbox, setIsSandbox] = useState(true);
   const [partnerKey, setPartnerKey] = useState('gdd_dummy_partner_key_1092');
   const [showDevSettings, setShowDevSettings] = useState(false);
-  const [sdkStatus, setSdkStatus] = useState('Not Loaded');
+  const [sdkStatus, setSdkStatus] = useState('Simulator Mode Active');
+  
+  // Mock Truecaller Identity settings
+  const [mockName, setMockName] = useState('Sahil Sepat');
+  const [mockPhone, setMockPhone] = useState('+91 98765 43210');
 
+  if (!isOpen) return null;
 
   // DYNAMIC SCRIPT INJECTION: Load Truecaller Web SDK CDN Script
   useEffect(() => {
@@ -46,7 +52,7 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
     document.body.appendChild(script);
 
     return () => {
-      // Keep script cached but reset if needed
+      // Cleanups
     };
   }, [isSandbox]);
 
@@ -76,14 +82,13 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
             setLoadingStep(0);
             setMethod(null);
             alert(`SDK Error: ${error.message || 'Verification aborted'}. Falling back to Sandbox.`);
-            setIsSandbox(true); // Auto-fallback to Sandbox
+            setIsSandbox(true);
           }
         });
         setSdkStatus('Initialized & Ready');
       }
     } catch (err) {
       setSdkStatus('Init Error: ' + err.message);
-      console.error('Truecaller Init Error:', err);
     }
   };
 
@@ -92,14 +97,12 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
     setMethod('truecaller');
 
     if (isSandbox) {
-      // 1. SIMULATION FLOW: Slides up our custom beautiful permission drawer
       setLoadingStep(1);
       setLoadingText('Connecting to Truecaller Secure Gateway...');
       setTimeout(() => {
         setLoadingStep(2); // Display Slide-up verification card
       }, 1200);
     } else {
-      // 2. LIVE PRODUCTION SDK API FLOW
       if (!window.Truecaller) {
         alert('Truecaller SDK is not loaded yet or blocked by domain. Bypassing to Sandbox Mode.');
         setIsSandbox(true);
@@ -113,7 +116,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
       setLoadingText('Triggering Truecaller One-Tap Web SDK...');
       
       try {
-        // Officially trigger the Truecaller One-Tap flow
         window.Truecaller.triggerOneTap();
       } catch (err) {
         alert('Truecaller triggerOneTap failed due to Domain mismatch on localhost. Auto-bypassing to Sandbox.');
@@ -133,8 +135,8 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         setLoadingStep(4);
         setTimeout(() => {
           onLoginSuccess({
-            name: 'Sahil Sepat',
-            phone: '+91 98765 43210'
+            name: mockName, // Use customizable sandbox name!
+            phone: mockPhone // Use customizable sandbox phone!
           });
           onClose();
         }, 800);
@@ -150,6 +152,10 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
 
   const handleSendOtp = (e) => {
     e.preventDefault();
+    if (!nameInput.trim()) {
+      alert("Please enter your Full Name.");
+      return;
+    }
     if (!phoneInput || phoneInput.length < 10) {
       alert("Please enter a valid 10-digit mobile number.");
       return;
@@ -175,7 +181,7 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         setLoadingStep(4);
         setTimeout(() => {
           onLoginSuccess({
-            name: 'Sahil Sepat',
+            name: nameInput, // Use the user's custom registered name!
             phone: phoneInput.startsWith('+91') ? phoneInput : `+91 ${phoneInput}`
           });
           onClose();
@@ -223,6 +229,28 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
                 {sdkStatus}
               </strong>
             </div>
+            
+            {/* Custom Mock Profile Name */}
+            <div className="dev-row">
+              <label>Mock Profile Name:</label>
+              <input 
+                type="text" 
+                value={mockName} 
+                onChange={(e) => setMockName(e.target.value)} 
+                className="dev-input"
+              />
+            </div>
+            {/* Custom Mock Profile Phone */}
+            <div className="dev-row">
+              <label>Mock Profile Phone:</label>
+              <input 
+                type="text" 
+                value={mockPhone} 
+                onChange={(e) => setMockPhone(e.target.value)} 
+                className="dev-input"
+              />
+            </div>
+
             <div className="dev-row">
               <label>Partner Key:</label>
               <input 
@@ -257,7 +285,6 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         {/* ZOMATO INSPIRED LOGIN VIEW */}
         {method === null && (
           <div className="zomato-login-menu">
-            {/* Header logo & welcome */}
             <div className="zomato-header-logo">
               <div className="logo-milk-bottle">🥛</div>
               <div className="zomato-glow-ring"></div>
@@ -267,10 +294,26 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
             
             <h4 className="zomato-login-title">Login or Signup</h4>
 
-            {/* ZOMATO-STYLE PHONE NUMBER INPUT FORM */}
+            {/* ZOMATO-STYLE CUSTOMER REGISTER & PHONE FORM */}
             <form onSubmit={handleSendOtp} className="zomato-phone-form">
+              {/* Full Name Input Slot */}
+              <div className="zomato-input-wrapper" style={{ marginBottom: '8px' }}>
+                <div className="country-flag-selector">
+                  <User size={18} className="text-secondary" style={{ marginRight: '6px' }} />
+                  <span className="divider-line">|</span>
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter Full Name"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  className="zomato-phone-input"
+                />
+              </div>
+
+              {/* Phone Number Input Slot */}
               <div className="zomato-input-wrapper">
-                {/* 🇮🇳 Country Flag Prefix Dropdown */}
                 <div className="country-flag-selector">
                   <span className="flag-icon">🇮🇳</span>
                   <span className="prefix-num">+91</span>
@@ -304,7 +347,7 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
             >
               <div className="tc-btn-inner">
                 <span className="tc-btn-icon">🛡️</span>
-                <span>Continue as Sahil Sepat</span>
+                <span>Continue as {mockName}</span>
               </div>
               <span className="verified-badge-zomato">Verified</span>
             </button>
@@ -339,13 +382,13 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
                 </div>
                 
                 <div className="profile-card">
-                  <div className="profile-avatar">S</div>
+                  <div className="profile-avatar">{mockName.charAt(0)}</div>
                   <div className="profile-meta">
                     <div className="profile-name-row">
-                      <h4>Sahil Sepat</h4>
+                      <h4>{mockName}</h4>
                       <span className="verified-tick-badge" title="Verified by Truecaller">✓</span>
                     </div>
-                    <span className="profile-phone">+91 98765 43210</span>
+                    <span className="profile-phone">{mockPhone}</span>
                   </div>
                 </div>
 
@@ -371,7 +414,7 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
                   <Check size={40} />
                 </div>
                 <h4>Truecaller Verified!</h4>
-                <p>Welcome back, Sahil.</p>
+                <p>Welcome back, {mockName}.</p>
               </div>
             )}
           </div>

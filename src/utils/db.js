@@ -1,4 +1,4 @@
-// Simulated database with LocalStorage persistence
+// Simulated database with LocalStorage persistence - MongoDB Ready Architecture
 
 export const PRODUCTS = [
   {
@@ -116,20 +116,26 @@ export function initDB() {
   if (!localStorage.getItem('gdd_initialized')) {
     localStorage.setItem('gdd_initialized', 'true');
     localStorage.setItem('gdd_products', JSON.stringify(PRODUCTS));
-    localStorage.setItem('gdd_subscriptions', JSON.stringify([]));
-    localStorage.setItem('gdd_orders', JSON.stringify(MOCK_ORDERS));
     localStorage.setItem('gdd_inventory', JSON.stringify(MOCK_INVENTORY));
-    localStorage.setItem('gdd_user', JSON.stringify({
-      name: 'Sahil Sepat',
-      phone: '+91 98765 43210',
-      points: 250,
-      address: 'Plot 45, Amrapali Circle, Vaishali Nagar, Jaipur',
-      coords: { lat: 26.9082, lng: 75.7485 } // Defaults to Vaishali Nagar coordinates
-    }));
+    
+    // Primary customer collection table (mimics MongoDB)
+    const initialUsers = {
+      '+91 98765 43210': {
+        name: 'Sahil Sepat',
+        phone: '+91 98765 43210',
+        points: 250,
+        address: 'Plot 45, Amrapali Circle, Vaishali Nagar, Jaipur',
+        coords: { lat: 26.9082, lng: 75.7485 },
+        subscriptions: [],
+        orders: MOCK_ORDERS
+      }
+    };
+    
+    localStorage.setItem('gdd_users', JSON.stringify(initialUsers));
   }
 }
 
-// Helper methods to read/write from local storage
+// Get helper for keys
 export function getDBData(key) {
   initDB();
   return JSON.parse(localStorage.getItem(`gdd_${key}`));
@@ -139,9 +145,40 @@ export function setDBData(key, data) {
   localStorage.setItem(`gdd_${key}`, JSON.stringify(data));
 }
 
-// Add a subscriber
-export function addSubscription(sub) {
-  const subs = getDBData('subscriptions');
+// Fetch or create user record by Phone Number
+export function getUserProfile(phone) {
+  initDB();
+  const users = JSON.parse(localStorage.getItem('gdd_users')) || {};
+  
+  if (!users[phone]) {
+    // Create new customer account with signup bonus
+    users[phone] = {
+      name: 'New Customer',
+      phone: phone,
+      points: 250, // Welcome points!
+      address: 'Plot/House Details, Jaipur',
+      coords: { lat: 26.9082, lng: 75.7485 }, // Defaults to Vaishali Circle
+      subscriptions: [],
+      orders: []
+    };
+    localStorage.setItem('gdd_users', JSON.stringify(users));
+  }
+  
+  return users[phone];
+}
+
+// Save/Update user profile record
+export function saveUserProfile(phone, profile) {
+  initDB();
+  const users = JSON.parse(localStorage.getItem('gdd_users')) || {};
+  users[phone] = profile;
+  localStorage.setItem('gdd_users', JSON.stringify(users));
+}
+
+// Add a subscriber under user's profile
+export function addSubscription(phone, sub) {
+  const user = getUserProfile(phone);
+  
   const newSub = {
     id: 'sub_' + Math.random().toString(36).substr(2, 9),
     startDate: new Date().toISOString().split('T')[0],
@@ -149,52 +186,88 @@ export function addSubscription(sub) {
     deliveriesCompleted: 0,
     ...sub
   };
-  subs.unshift(newSub);
-  setDBData('subscriptions', subs);
   
-  // Deduct inventory for tomorrow
+  user.subscriptions.unshift(newSub);
+  user.points += Math.round(sub.totalPrice * 0.05); // 5% cashback
+  
+  saveUserProfile(phone, user);
+  
+  // Deduct inventory
   updateInventoryForBranch(sub.branchId, sub.productId, sub.quantity);
-  
-  // Award points
-  const user = getDBData('user');
-  user.points += Math.round(sub.totalPrice * 0.05); // 5% cash back in points
-  setDBData('user', user);
   
   return newSub;
 }
 
-// Update local inventory on order
+// Add standard order under user's profile
+export function addOrder(phone, order) {
+  const user = getUserProfile(phone);
+  
+  const newOrder = {
+    id: 'GDD_' + Math.floor(100000 + Math.random() * 90000).toString(),
+    date: new Date().toISOString(),
+    status: 'Preparing',
+    ...order
+  };
+  
+  user.orders.unshift(newOrder);
+  user.points += Math.round(order.totalAmount * 0.05); // 5% cashback
+  
+  saveUserProfile(phone, user);
+  
+  // Deduct inventories for items
+  order.items.forEach(item => {
+    updateInventoryForBranch(order.branchId, item.id, item.quantity);
+  });
+  
+  return newOrder;
+}
+
+// Aggregate ALL orders across ALL users for Shopkeeper Dashboard
+export function getAllOrders() {
+  initDB();
+  const users = JSON.parse(localStorage.getItem('gdd_users')) || {};
+  let allOrders = [];
+  
+  Object.values(users).forEach(user => {
+    if (user.orders && user.orders.length > 0) {
+      allOrders = allOrders.concat(user.orders);
+    }
+  });
+  
+  // Sort by date (descending)
+  return allOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+// Save modified global orders queue (from Admin operations)
+export function updateGlobalOrderStatus(orderId, nextStatus) {
+  initDB();
+  const users = JSON.parse(localStorage.getItem('gdd_users')) || {};
+  
+  Object.keys(users).forEach(phone => {
+    let changed = false;
+    const updatedOrders = users[phone].orders.map(order => {
+      if (order.id === orderId) {
+        changed = true;
+        return { ...order, status: nextStatus };
+      }
+      return order;
+    });
+    
+    if (changed) {
+      users[phone].orders = updatedOrders;
+    }
+  });
+  
+  localStorage.setItem('gdd_users', JSON.stringify(users));
+}
+
+// Update inventory
 function updateInventoryForBranch(branchId, productId, qty) {
   const inv = getDBData('inventory');
   if (inv[branchId] && inv[branchId][productId] !== undefined) {
     inv[branchId][productId] = Math.max(0, inv[branchId][productId] - qty);
     setDBData('inventory', inv);
   }
-}
-
-// Add a standard order
-export function addOrder(order) {
-  const orders = getDBData('orders');
-  const newOrder = {
-    id: 'GDD_' + Math.floor(100000 + Math.random() * 90000).toString(),
-    date: new Date().toISOString(),
-    status: 'Preparing', // Preparing -> Out for Delivery -> Delivered
-    ...order
-  };
-  orders.unshift(newOrder);
-  setDBData('orders', orders);
-
-  // Update inventories for all items in the order
-  order.items.forEach(item => {
-    updateInventoryForBranch(order.branchId, item.id, item.quantity);
-  });
-
-  // Award points
-  const user = getDBData('user');
-  user.points += Math.round(order.totalAmount * 0.05);
-  setDBData('user', user);
-
-  return newOrder;
 }
 
 // MOCK DATA SEED
@@ -209,7 +282,7 @@ const MOCK_INVENTORY = {
 const MOCK_ORDERS = [
   {
     id: 'GDD_48921',
-    date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+    date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     status: 'Out for Delivery',
     branchId: 'vaishali',
     customerName: 'Sahil Sepat',
@@ -224,7 +297,7 @@ const MOCK_ORDERS = [
   },
   {
     id: 'GDD_48210',
-    date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
+    date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     status: 'Delivered',
     branchId: 'vaishali',
     customerName: 'Sahil Sepat',

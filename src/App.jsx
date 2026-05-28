@@ -7,13 +7,14 @@ import CheckoutWizard from './components/CheckoutWizard';
 import CustomerDashboard from './components/CustomerDashboard';
 import ShopkeeperPortal from './components/ShopkeeperPortal';
 import TruecallerLogin from './components/TruecallerLogin';
+import WhatsAppSimulator from './components/WhatsAppSimulator';
 import Footer from './components/Footer';
 
-import { initDB, getDBData, setDBData, addOrder, addSubscription } from './utils/db';
-import { Calendar, Compass, Shield, Smile, ArrowRight, HelpCircle, ChevronDown, CheckCircle, Home, ShoppingBag as StoreIcon, LogIn, LogOut, Award } from 'lucide-react';
+import { initDB, getDBData, setDBData, addOrder, addSubscription, getUserProfile, saveUserProfile } from './utils/db';
+import { Calendar, Compass, Shield, Smile, ArrowRight, HelpCircle, ChevronDown, CheckCircle, Home, ShoppingBag as StoreIcon, LogIn, LogOut, Award, MessageCircle } from 'lucide-react';
 
 export default function App() {
-  // Initialize Database state
+  // Initialize Database
   useEffect(() => {
     initDB();
   }, []);
@@ -24,12 +25,11 @@ export default function App() {
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
 
-  // Authenticated User State (Supports Guest browsing!)
+  // PERSISTENT AUTH SESSION - Reloading page will NEVER log the customer out!
   const [user, setUser] = useState(() => {
     initDB();
-    // Default to guest (null) for demoing Truecaller Login first!
-    // If guest clicks checkout or subscriptions, they get prompted to login.
-    return null; 
+    const active = localStorage.getItem('gdd_active_user');
+    return active ? JSON.parse(active) : null; 
   });
   const [loginOpen, setLoginOpen] = useState(false);
 
@@ -47,19 +47,26 @@ export default function App() {
   // Checkout Direct Subs order
   const [directSubscriptionOrder, setDirectSubscriptionOrder] = useState(null);
 
+  // WhatsApp Simulator Widget States
+  const [waOpen, setWaOpen] = useState(false);
+  const [waActiveOrder, setWaActiveOrder] = useState(null);
+  const [waActiveSubscription, setWaActiveSubscription] = useState(null);
+
   // FAQ Accordion State
   const [expandedFaq, setExpandedFaq] = useState({});
 
   // Sync state changes with database
   useEffect(() => {
     if (user) {
-      setSubscriptions(getDBData('subscriptions') || []);
-      setOrders(getDBData('orders') || []);
+      // Query specific customer profile from relational schema by phone index!
+      const profile = getUserProfile(user.phone);
+      setSubscriptions(profile.subscriptions || []);
+      setOrders(profile.orders || []);
       setInventory(getDBData('inventory') || {});
-      setUserPoints(user.points || 0);
+      setUserPoints(profile.points || 0);
       
-      if (user.coords) setSelectedCoords(user.coords);
-      if (user.address) setSelectedAddress(user.address);
+      if (profile.coords) setSelectedCoords(profile.coords);
+      if (profile.address) setSelectedAddress(profile.address);
     } else {
       setSubscriptions([]);
       setOrders([]);
@@ -78,24 +85,33 @@ export default function App() {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
-  // Truecaller Verification Callbacks
+  // Truecaller / Manual Profile Verification Callbacks
   const handleLoginSuccess = (profile) => {
-    const freshUserObj = {
-      name: profile.name,
-      phone: profile.phone,
-      points: 250, // Initial sign-in points bonus!
-      address: selectedAddress,
-      coords: selectedCoords
-    };
+    // Retrieve custom record or construct a new one in localized collection
+    const userRecord = getUserProfile(profile.phone);
     
-    // Save to LocalStorage DB
-    setDBData('user', freshUserObj);
-    setUser(freshUserObj);
+    // Override profile name with the one custom entered during Zomato OTP login
+    userRecord.name = profile.name;
+    userRecord.address = selectedAddress;
+    userRecord.coords = selectedCoords;
+    
+    // Save customer record under his phone index
+    saveUserProfile(profile.phone, userRecord);
+    
+    // Set active auth session in localStorage
+    localStorage.setItem('gdd_active_user', JSON.stringify({
+      name: userRecord.name,
+      phone: userRecord.phone,
+      points: userRecord.points
+    }));
+    
+    setUser(userRecord);
     setLoginOpen(false);
   };
 
   const handleLogout = () => {
     if (confirm("Are you sure you want to log out from Ganga Dudh Dairy?")) {
+      localStorage.removeItem('gdd_active_user');
       setUser(null);
       setView('home');
       setCart([]);
@@ -183,7 +199,8 @@ export default function App() {
   // Final Order Placed Callback
   const handleOrderSuccess = (orderObj) => {
     if (orderObj.subscription) {
-      const newSub = addSubscription({
+      // Save subscription under active user's phone index record in gdd_users
+      const newSub = addSubscription(user.phone, {
         productId: orderObj.subscription.productId,
         name: orderObj.subscription.name,
         quantity: orderObj.subscription.quantity,
@@ -194,46 +211,63 @@ export default function App() {
         totalPrice: orderObj.subscription.totalPrice,
         branchId: orderObj.branchId
       });
+      
       setSubscriptions([newSub, ...subscriptions]);
+      setWaActiveSubscription(newSub);
+      setWaActiveOrder(null);
     } else {
-      const newOrd = addOrder({
+      // Save standard order under active user's phone index record in gdd_users
+      const newOrd = addOrder(user.phone, {
         items: orderObj.items,
         branchId: orderObj.branchId,
         customerName: orderObj.customerName,
         address: orderObj.address,
         coords: orderObj.coords,
         deliveryFee: orderObj.totalAmount >= 200 ? 0 : 15,
-        totalAmount: orderObj.totalAmount
+        totalAmount: orderObj.totalAmount,
+        deliverySlot: orderObj.deliverySlot
       });
+      
       setOrders([newOrd, ...orders]);
+      setWaActiveOrder(newOrd);
+      setWaActiveSubscription(null);
       setCart([]);
     }
 
-    // Refresh user points
-    const dbUserObj = getDBData('user');
-    if (dbUserObj) {
-      setUser(dbUserObj);
-      setUserPoints(dbUserObj.points);
-    }
+    // Update state loyalty points from custom record
+    const updatedProfile = getUserProfile(user.phone);
+    setUserPoints(updatedProfile.points);
+    
+    // Save session state
+    localStorage.setItem('gdd_active_user', JSON.stringify({
+      name: updatedProfile.name,
+      phone: updatedProfile.phone,
+      points: updatedProfile.points
+    }));
+
+    // Seamlessly trigger WhatsApp alert simulator modal!
+    setTimeout(() => {
+      setWaOpen(true);
+    }, 600);
   };
 
   // Customer sub changes
   const handleToggleSub = (subId, nextStatus) => {
-    const subs = getDBData('subscriptions');
-    const nextSubs = subs.map((s) => {
+    const profile = getUserProfile(user.phone);
+    profile.subscriptions = profile.subscriptions.map((s) => {
       if (s.id === subId) return { ...s, status: nextStatus };
       return s;
     });
-    setDBData('subscriptions', nextSubs);
-    setSubscriptions(nextSubs);
+    saveUserProfile(user.phone, profile);
+    setSubscriptions(profile.subscriptions);
   };
 
   const handleCancelSub = (subId) => {
     if (confirm("Are you sure you want to cancel this fresh milk subscription?")) {
-      const subs = getDBData('subscriptions');
-      const nextSubs = subs.filter(s => s.id !== subId);
-      setDBData('subscriptions', nextSubs);
-      setSubscriptions(nextSubs);
+      const profile = getUserProfile(user.phone);
+      profile.subscriptions = profile.subscriptions.filter(s => s.id !== subId);
+      saveUserProfile(user.phone, profile);
+      setSubscriptions(profile.subscriptions);
     }
   };
 
@@ -249,6 +283,13 @@ export default function App() {
       setView('checkout');
     }
   }, [user]);
+
+  // Open general greetings WhatsApp simulator
+  const handleOpenGeneralWhatsApp = () => {
+    setWaActiveOrder(null);
+    setWaActiveSubscription(null);
+    setWaOpen(true);
+  };
 
   return (
     <div className="app-shell">
@@ -268,6 +309,16 @@ export default function App() {
         isOpen={loginOpen}
         onClose={() => setLoginOpen(false)}
         onLoginSuccess={handleLoginSuccess}
+      />
+
+      {/* WhatsApp Automation Simulator Mobile Dialog */}
+      <WhatsAppSimulator 
+        isOpen={waOpen}
+        onClose={() => setWaOpen(false)}
+        customerName={user ? user.name : 'Sahil Sepat'}
+        phone={user ? user.phone : '+91 98765 43210'}
+        activeOrder={waActiveOrder}
+        activeSubscription={waActiveSubscription}
       />
 
       {/* Cart Sliding Drawer overlay */}
@@ -301,7 +352,7 @@ export default function App() {
             <div className="container flex-row-between">
               <span className="flex-row-center gap-6">
                 <span className="verified-tc-inline">🛡️</span>
-                <span>Logged in as **Sahil Sepat** (+91 98765 43210).</span>
+                <span>Logged in as **{user.name}** ({user.phone}).</span>
                 <span className="badge badge-milk" style={{ textTransform: 'none' }}>{userPoints} Loyalty Pts</span>
               </span>
               <button onClick={handleLogout} className="btn-logout flex-row-center gap-4">
@@ -466,6 +517,16 @@ export default function App() {
 
       </main>
 
+      {/* Floating pulsing WhatsApp Support chat bubble (Resting neatly above navigation on bottom right) */}
+      <button 
+        onClick={handleOpenGeneralWhatsApp}
+        className="wa-floating-trigger pulse-wa"
+        title="WhatsApp Support & Automated Delivery Simulator"
+      >
+        <MessageCircle size={26} />
+        <span className="wa-tooltip">WhatsApp Alerts</span>
+      </button>
+
       {/* Mobile Sticky Bottom Navigation Menu Bar (Active below 768px viewport) */}
       <nav className="mobile-bottom-nav">
         <button 
@@ -511,6 +572,58 @@ export default function App() {
           flex-grow: 1;
         }
         
+        /* Floating WhatsApp Support Action Trigger Bubble */
+        .wa-floating-trigger {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          width: 56px;
+          height: 56px;
+          background: #25d366; /* Official WhatsApp green */
+          color: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 8px 32px rgba(37, 211, 102, 0.35);
+          z-index: 9998;
+          transition: all 0.2s;
+        }
+        .wa-floating-trigger:hover {
+          background: #128c7e;
+          transform: translateY(-2px);
+          box-shadow: 0 12px 40px rgba(18, 140, 126, 0.45);
+        }
+        .wa-tooltip {
+          position: absolute;
+          right: 68px;
+          background: var(--bg-card);
+          color: var(--text-primary);
+          border: 1px solid var(--border-color);
+          border-radius: var(--radius-sm);
+          padding: 6px 12px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          white-space: nowrap;
+          box-shadow: var(--shadow-md);
+          opacity: 0;
+          transform: translateX(10px);
+          pointer-events: none;
+          transition: all 0.2s ease-out;
+        }
+        .wa-floating-trigger:hover .wa-tooltip {
+          opacity: 1;
+          transform: translateX(0);
+        }
+        @keyframes waPulse {
+          0% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.6); }
+          70% { box-shadow: 0 0 0 12px rgba(37, 211, 102, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
+        }
+        .pulse-wa {
+          animation: waPulse 2s infinite;
+        }
+
         /* Guest / Logged In Accounts Banners */
         .guest-login-bar {
           background: var(--ghee-gold-light);
@@ -569,7 +682,7 @@ export default function App() {
           backdrop-filter: blur(16px);
           -webkit-backdrop-filter: blur(16px);
           border-top: 1px solid var(--border-color);
-          z-index: 9999;
+          z-index: 9997; /* Just below floating button */
           justify-content: space-around;
           align-items: center;
           box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
@@ -766,6 +879,13 @@ export default function App() {
         @media (max-width: 768px) {
           .mobile-bottom-nav {
             display: flex;
+          }
+          /* Lift floating WhatsApp button above bottom nav on mobile */
+          .wa-floating-trigger {
+            bottom: 80px;
+            right: 16px;
+            width: 50px;
+            height: 50px;
           }
           .hero-layout {
             grid-template-columns: 1fr;
