@@ -301,7 +301,7 @@ export default function App() {
             <div className="container flex-row-between">
               <span className="flex-row-center gap-6">
                 <span className="verified-tc-inline">🛡️</span>
-                <span>Logged in as **Sahil Sharma** (+91 98765 43210).</span>
+                <span>Logged in as **Sahil Sepat** (+91 98765 43210).</span>
                 <span className="badge badge-milk" style={{ textTransform: 'none' }}>{userPoints} Loyalty Pts</span>
               </span>
               <button onClick={handleLogout} className="btn-logout flex-row-center gap-4">

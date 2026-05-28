@@ -17,7 +17,7 @@ export default function CheckoutWizard({
   const [isSimulating, setIsSimulating] = useState(false);
   const [upiTimer, setUpiTimer] = useState(120); // 2 minute countdown
   const [phone, setPhone] = useState('+91 98765 43210');
-  const [name, setName] = useState('Sahil Sharma');
+  const [name, setName] = useState('Sahil Sepat');
 
   // Calculates billing
   const isSubscription = !!subscriptionOrder;

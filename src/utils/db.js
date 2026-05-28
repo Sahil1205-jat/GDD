@@ -120,7 +120,7 @@ export function initDB() {
     localStorage.setItem('gdd_orders', JSON.stringify(MOCK_ORDERS));
     localStorage.setItem('gdd_inventory', JSON.stringify(MOCK_INVENTORY));
     localStorage.setItem('gdd_user', JSON.stringify({
-      name: 'Sahil Sharma',
+      name: 'Sahil Sepat',
       phone: '+91 98765 43210',
       points: 250,
       address: 'Plot 45, Amrapali Circle, Vaishali Nagar, Jaipur',
@@ -212,7 +212,7 @@ const MOCK_ORDERS = [
     date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
     status: 'Out for Delivery',
     branchId: 'vaishali',
-    customerName: 'Sahil Sharma',
+    customerName: 'Sahil Sepat',
     address: 'Plot 45, Amrapali Circle, Vaishali Nagar, Jaipur',
     coords: { lat: 26.9082, lng: 75.7485 },
     items: [
@@ -227,7 +227,7 @@ const MOCK_ORDERS = [
     date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
     status: 'Delivered',
     branchId: 'vaishali',
-    customerName: 'Sahil Sharma',
+    customerName: 'Sahil Sepat',
     address: 'Plot 45, Amrapali Circle, Vaishali Nagar, Jaipur',
     coords: { lat: 26.9082, lng: 75.7485 },
     items: [

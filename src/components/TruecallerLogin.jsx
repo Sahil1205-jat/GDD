@@ -32,7 +32,7 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         setLoadingStep(4);
         setTimeout(() => {
           onLoginSuccess({
-            name: 'Sahil Sharma',
+            name: 'Sahil Sepat',
             phone: '+91 98765 43210'
           });
           onClose();
@@ -76,7 +76,7 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
         setLoadingStep(4);
         setTimeout(() => {
           onLoginSuccess({
-            name: 'Sahil Sharma', // Default mock user name
+            name: 'Sahil Sepat', // Default mock user name
             phone: phoneInput.startsWith('+91') ? phoneInput : `+91 ${phoneInput}`
           });
           onClose();
@@ -167,7 +167,7 @@ export default function TruecallerLogin({ isOpen, onClose, onLoginSuccess }) {
                   <div className="profile-avatar">S</div>
                   <div className="profile-meta">
                     <div className="profile-name-row">
-                      <h4>Sahil Sharma</h4>
+                      <h4>Sahil Sepat</h4>
                       <span className="verified-tick-badge" title="Verified by Truecaller">✓</span>
                     </div>
                     <span className="profile-phone">+91 98765 43210</span>
