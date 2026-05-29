@@ -1,10 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Send, CheckCheck, ShieldAlert, ArrowLeft, Phone, Video, MoreVertical, Paperclip, Smile } from 'lucide-react';
 
-export default function WhatsAppSimulator({ isOpen, onClose, customerName, phone, activeOrder, activeSubscription }) {
+export default function WhatsAppSimulator({ isOpen, onClose, customerName, phone, activeOrder, activeSubscription, onTrackOrderLinkClick }) {
   const [messages, setMessages] = useState([]);
   
   if (!isOpen) return null;
+
+  const handleTrackLinkClick = () => {
+    onClose();
+    if (onTrackOrderLinkClick) {
+      const mockTrackOrder = activeOrder || {
+        id: 'GDD_48921',
+        branchId: 'vaishali',
+        address: 'Plot 45, Amrapali Circle, Vaishali Nagar, Jaipur',
+        coords: { lat: 26.9082, lng: 75.7485 }
+      };
+      onTrackOrderLinkClick(mockTrackOrder);
+    }
+  };
 
   useEffect(() => {
     // Generate simulated WhatsApp message templates based on transaction type
@@ -116,10 +129,35 @@ export default function WhatsAppSimulator({ isOpen, onClose, customerName, phone
                       formattedLine = parts.map((part, pIdx) => pIdx % 2 === 1 ? <strong key={pIdx}>{part}</strong> : part);
                     }
                     
-                    // Simple replacement of _italic_ to <em>
+                    // Simple replacement of _italic_ to <em> or Clickable Map Button
                     if (line.includes('_')) {
                       const parts = line.split('_');
-                      formattedLine = parts.map((part, pIdx) => pIdx % 2 === 1 ? <em key={pIdx}>{part}</em> : part);
+                      formattedLine = parts.map((part, pIdx) => {
+                        if (pIdx % 2 === 1) {
+                          if (part.includes('m.gangadudh.in/map/rider-092')) {
+                            return (
+                              <button 
+                                key={pIdx} 
+                                onClick={handleTrackLinkClick}
+                                style={{ 
+                                  color: '#34b7f1', 
+                                  background: 'none', 
+                                  border: 'none', 
+                                  textDecoration: 'underline', 
+                                  cursor: 'pointer', 
+                                  padding: 0, 
+                                  font: 'inherit',
+                                  textAlign: 'left'
+                                }}
+                              >
+                                {part}
+                              </button>
+                            );
+                          }
+                          return <em key={pIdx}>{part}</em>;
+                        }
+                        return part;
+                      });
                     }
 
                     return <p key={lIdx} className="wa-msg-line">{formattedLine}</p>;

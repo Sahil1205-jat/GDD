@@ -13,6 +13,7 @@ export default function CheckoutWizard({
 }) {
   const [step, setStep] = useState(1);
   const [addressDetails, setAddressDetails] = useState(userAddress || '');
+  const [receiptSnapshot, setReceiptSnapshot] = useState(null);
   const [deliverySlot, setDeliverySlot] = useState('morning'); // morning (6-9 AM) or evening (5-8 PM)
   const [paymentMethod, setPaymentMethod] = useState('upi'); // upi | card | cod
   const [isSimulating, setIsSimulating] = useState(false);
@@ -28,6 +29,8 @@ export default function CheckoutWizard({
   }, [user]);
 
   // Calculates billing
+  const [redeemPoints, setRedeemPoints] = useState(0);
+
   const isSubscription = !!subscriptionOrder;
   const items = isSubscription 
     ? [{ ...subscriptionOrder, quantity: subscriptionOrder.quantity }]
@@ -38,7 +41,16 @@ export default function CheckoutWizard({
     : items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
   const deliveryFee = subtotal >= 200 || subtotal === 0 ? 0 : 15;
-  const grandTotal = subtotal + deliveryFee;
+  
+  // Redeemable logic: 10 points = ₹1 off
+  const maxRedeemablePoints = user ? Math.min(Math.floor(user.points / 10) * 10, subtotal * 10) : 0;
+  const pointsDiscount = Math.round(redeemPoints / 10);
+  const grandTotal = Math.max(0, subtotal + deliveryFee - pointsDiscount);
+
+  // Reset points if user or subtotal changes
+  useEffect(() => {
+    setRedeemPoints(0);
+  }, [subtotal, user]);
 
   // Countdown timer for UPI payments
   useEffect(() => {
@@ -82,8 +94,17 @@ export default function CheckoutWizard({
         coords: userCoords,
         deliverySlot: deliverySlot === 'morning' ? 'Morning (6:00 AM - 9:00 AM)' : 'Evening (5:00 PM - 8:00 PM)',
         paymentMethod: paymentMethod.toUpperCase(),
-        totalAmount: grandTotal
+        totalAmount: grandTotal,
+        pointsRedeemed: redeemPoints // Deduct points from active user profile
       };
+
+      // Take static snapshot of parameters before cart is cleared in parent component
+      setReceiptSnapshot({
+        isSubscription,
+        grandTotal,
+        redeemPoints,
+        nearestShopName: nearestShop?.name || 'Vaishali Nagar Branch'
+      });
 
       onOrderSuccess(completeOrderObj);
       setStep(3);
@@ -177,6 +198,42 @@ export default function CheckoutWizard({
                   </button>
                 </div>
               </div>
+
+              {/* Loyalty Points Redemption Card */}
+              {user && user.points > 0 && (
+                <div className="loyalty-redeem-card bg-light-panel" style={{ marginTop: '20px', border: '1px solid var(--ghee-gold)', padding: '16px', borderRadius: '12px' }}>
+                  <div className="loyalty-header" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '1.25rem' }}>🎁</span>
+                    <strong style={{ color: 'var(--ghee-gold)', fontSize: '0.95rem' }}>Redeem Loyalty Points</strong>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: '1.4' }}>
+                    You have <strong style={{ color: 'var(--ghee-gold)' }}>{user.points}</strong> Milk Points. Redeem them for direct cash discounts at checkout (10 pts = ₹1 off).
+                  </p>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max={maxRedeemablePoints} 
+                      step="10" 
+                      value={redeemPoints}
+                      onChange={(e) => setRedeemPoints(parseInt(e.target.value))}
+                      style={{ flexGrow: 1, accentColor: 'var(--ghee-gold)', height: '6px', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontWeight: '800', fontSize: '0.95rem', color: 'var(--primary-milk)', minWidth: '70px', textAlign: 'right' }}>
+                      {redeemPoints} Pts
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                    <span>0% applied</span>
+                    <strong style={{ color: 'var(--chach-green)', fontSize: '0.8rem' }}>
+                      Discount Applied: -₹{pointsDiscount}
+                    </strong>
+                    <span>Max: {maxRedeemablePoints} Pts</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Sidebar Order Summary */}
@@ -202,6 +259,12 @@ export default function CheckoutWizard({
                   <span>Subtotal</span>
                   <span>₹{subtotal}</span>
                 </div>
+                {pointsDiscount > 0 && (
+                  <div className="summary-row" style={{ color: 'var(--chach-green)', fontWeight: '700' }}>
+                    <span>Loyalty Discount</span>
+                    <span>-₹{pointsDiscount}</span>
+                  </div>
+                )}
                 <div className="summary-row">
                   <span>Delivery Fee</span>
                   <span>{deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}</span>
@@ -350,6 +413,71 @@ export default function CheckoutWizard({
             <button onClick={() => setStep(1)} className="btn btn-secondary">
               <ArrowLeft size={16} />
               <span>Back to Shipping</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 3: Order Success Screen */}
+      {step === 3 && (
+        <div className="step-container text-center" style={{ padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+          <div className="success-icon-wrapper animate-bounce" style={{ background: 'var(--chach-green-light)', color: 'var(--chach-green)', borderRadius: '50%', width: '80px', height: '80px', display: 'flex', alignItems: 'center', justify: 'center', boxShadow: '0 8px 24px rgba(16, 185, 129, 0.25)' }}>
+            <Check size={44} style={{ strokeWidth: 3 }} />
+          </div>
+          
+          <h2 style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--text-primary)' }}>
+            Pranam! Order Confirmed 🎉
+          </h2>
+          
+          <p style={{ color: 'var(--text-secondary)', maxWidth: '500px', fontSize: '0.95rem', lineHeight: '1.5' }}>
+            Your pure farm-fresh dairy order has been successfully placed at our <strong>{receiptSnapshot?.nearestShopName || nearestShop?.name || 'Vaishali Nagar Branch'}</strong>. Sourced chilled at 4°C, it is being prepared for dispatch!
+          </p>
+
+          {/* Points summary card */}
+          <div className="glass-card" style={{ width: '100%', maxWidth: '440px', padding: '20px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+              <span>Transaction Type:</span>
+              <strong>{receiptSnapshot ? (receiptSnapshot.isSubscription ? 'Morning Subscription' : 'Standard Delivery') : (isSubscription ? 'Morning Subscription' : 'Standard Delivery')}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+              <span>Net Amount Paid:</span>
+              <strong>₹{receiptSnapshot ? receiptSnapshot.grandTotal : grandTotal}</strong>
+            </div>
+            {(receiptSnapshot ? receiptSnapshot.redeemPoints : redeemPoints) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--ghee-gold)' }}>
+                <span>Loyalty Points Spent:</span>
+                <strong>-{receiptSnapshot ? receiptSnapshot.redeemPoints : redeemPoints} Pts</strong>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--chach-green)' }}>
+              <span>Points Cashback Earned:</span>
+              <strong>+{Math.round((receiptSnapshot ? receiptSnapshot.grandTotal : grandTotal) * 0.05)} Pts</strong>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
+            <button 
+              onClick={onCancel}
+              className="btn btn-secondary"
+              style={{ height: '48px', padding: '0 24px' }}
+            >
+              Back to Shop
+            </button>
+            
+            <button 
+              onClick={() => {
+                // Trigger dashboard view by custom callback or manual navigation
+                const dashboardBtn = document.querySelector('.mobile-bottom-nav button:nth-child(3)');
+                if (dashboardBtn) {
+                  dashboardBtn.click();
+                } else {
+                  window.location.reload();
+                }
+              }}
+              className="btn btn-primary pulse-milk"
+              style={{ height: '48px', padding: '0 24px' }}
+            >
+              Track on Dashboard
             </button>
           </div>
         </div>

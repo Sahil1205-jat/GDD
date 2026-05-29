@@ -15,7 +15,7 @@ export default function Navbar({
   const navItems = [
     { id: 'home', label: 'Home' },
     { id: 'store', label: 'Shop Dairy' },
-    { id: 'customer', label: 'My Subscriptions' }
+    { id: 'customer', label: 'My Profile & Subs' }
   ];
 
   return (

@@ -138,7 +138,24 @@ export function initDB() {
 // Get helper for keys
 export function getDBData(key) {
   initDB();
-  return JSON.parse(localStorage.getItem(`gdd_${key}`));
+  const val = localStorage.getItem(`gdd_${key}`);
+  if (!val) {
+    if (key === 'products') {
+      localStorage.setItem('gdd_products', JSON.stringify(PRODUCTS));
+      return PRODUCTS;
+    }
+    if (key === 'inventory') {
+      localStorage.setItem('gdd_inventory', JSON.stringify(MOCK_INVENTORY));
+      return MOCK_INVENTORY;
+    }
+  }
+  try {
+    return JSON.parse(val);
+  } catch (e) {
+    if (key === 'products') return PRODUCTS;
+    if (key === 'inventory') return MOCK_INVENTORY;
+    return null;
+  }
 }
 
 export function setDBData(key, data) {
@@ -148,7 +165,12 @@ export function setDBData(key, data) {
 // Fetch or create user record by Phone Number
 export function getUserProfile(phone) {
   initDB();
-  const users = JSON.parse(localStorage.getItem('gdd_users')) || {};
+  let users = {};
+  try {
+    users = JSON.parse(localStorage.getItem('gdd_users')) || {};
+  } catch (e) {
+    users = {};
+  }
   
   if (!users[phone]) {
     // Create new customer account with signup bonus
@@ -162,6 +184,17 @@ export function getUserProfile(phone) {
       orders: []
     };
     localStorage.setItem('gdd_users', JSON.stringify(users));
+  } else {
+    // Defensively guarantee arrays and numbers to prevent unshift / calculation crashes
+    if (!users[phone].subscriptions || !Array.isArray(users[phone].subscriptions)) {
+      users[phone].subscriptions = [];
+    }
+    if (!users[phone].orders || !Array.isArray(users[phone].orders)) {
+      users[phone].orders = [];
+    }
+    if (typeof users[phone].points !== 'number') {
+      users[phone].points = 0;
+    }
   }
   
   return users[phone];
@@ -210,7 +243,15 @@ export function addOrder(phone, order) {
   };
   
   user.orders.unshift(newOrder);
-  user.points += Math.round(order.totalAmount * 0.05); // 5% cashback
+  
+  // Deduct points redeemed if applicable
+  if (order.pointsRedeemed) {
+    user.points = Math.max(0, user.points - order.pointsRedeemed);
+  }
+  
+  // 5% cashback on the net payment amount
+  const netAmount = Math.max(0, order.totalAmount);
+  user.points += Math.round(netAmount * 0.05); // 5% cashback
   
   saveUserProfile(phone, user);
   
@@ -220,6 +261,35 @@ export function addOrder(phone, order) {
   });
   
   return newOrder;
+}
+
+// Claim a loyalty reward coupon in dashboard
+export function claimReward(phone, rewardId, pointsCost, rewardTitle) {
+  const user = getUserProfile(phone);
+  if (user.points < pointsCost) {
+    return { success: false, error: 'Insufficient points' };
+  }
+  
+  // Deduct points
+  user.points -= pointsCost;
+  
+  // Initialize claimedRewards array if not present
+  if (!user.claimedRewards) {
+    user.claimedRewards = [];
+  }
+  
+  const newReward = {
+    id: 'rew_' + Math.random().toString(36).substr(2, 9),
+    rewardId,
+    title: rewardTitle,
+    claimedDate: new Date().toISOString().split('T')[0],
+    code: 'GDD_' + rewardId.toUpperCase().replace(/-/g, '_') + '_' + Math.floor(1000 + Math.random() * 9000)
+  };
+  
+  user.claimedRewards.unshift(newReward);
+  saveUserProfile(phone, user);
+  
+  return { success: true, reward: newReward, updatedPoints: user.points };
 }
 
 // Aggregate ALL orders across ALL users for Shopkeeper Dashboard

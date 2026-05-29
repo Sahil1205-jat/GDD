@@ -10,8 +10,9 @@ import TruecallerLogin from './components/TruecallerLogin';
 import WhatsAppSimulator from './components/WhatsAppSimulator';
 import Footer from './components/Footer';
 
-import { initDB, getDBData, setDBData, addOrder, addSubscription, getUserProfile, saveUserProfile } from './utils/db';
-import { Calendar, Compass, Shield, Smile, ArrowRight, HelpCircle, ChevronDown, CheckCircle, Home, ShoppingBag as StoreIcon, LogIn, LogOut, Award, MessageCircle } from 'lucide-react';
+import { initDB, getDBData, setDBData, addOrder, addSubscription, getUserProfile, saveUserProfile, claimReward } from './utils/db';
+import RiderTracker from './components/RiderTracker';
+import { Calendar, Compass, Shield, Smile, ArrowRight, HelpCircle, ChevronDown, CheckCircle, Home, ShoppingBag as StoreIcon, LogIn, LogOut, Award, MessageCircle, User } from 'lucide-react';
 
 export default function App() {
   // Initialize Database
@@ -51,6 +52,7 @@ export default function App() {
   const [waOpen, setWaOpen] = useState(false);
   const [waActiveOrder, setWaActiveOrder] = useState(null);
   const [waActiveSubscription, setWaActiveSubscription] = useState(null);
+  const [activeTrackingOrder, setActiveTrackingOrder] = useState(null); // Real-time delivery tracker map state
 
   // FAQ Accordion State
   const [expandedFaq, setExpandedFaq] = useState({});
@@ -198,6 +200,11 @@ export default function App() {
 
   // Final Order Placed Callback
   const handleOrderSuccess = (orderObj) => {
+    if (!user) {
+      console.error("Order success called but no active user session is found.");
+      return;
+    }
+
     if (orderObj.subscription) {
       // Save subscription under active user's phone index record in gdd_users
       const newSub = addSubscription(user.phone, {
@@ -237,6 +244,7 @@ export default function App() {
     // Update state loyalty points from custom record
     const updatedProfile = getUserProfile(user.phone);
     setUserPoints(updatedProfile.points);
+    setUser(updatedProfile);
     
     // Save session state
     localStorage.setItem('gdd_active_user', JSON.stringify({
@@ -249,6 +257,37 @@ export default function App() {
     setTimeout(() => {
       setWaOpen(true);
     }, 600);
+  };
+
+  // Profile Updating Callback
+  const handleUpdateProfile = (updatedProfile) => {
+    saveUserProfile(updatedProfile.phone, updatedProfile);
+    setUser(updatedProfile);
+    localStorage.setItem('gdd_active_user', JSON.stringify({
+      name: updatedProfile.name,
+      phone: updatedProfile.phone,
+      points: updatedProfile.points
+    }));
+  };
+
+  // Reward Coupon Claiming
+  const handleClaimReward = (rewardId, pointsCost, title) => {
+    if (!user) return { success: false, error: 'Please log in to claim loyalty store items' };
+    const res = claimReward(user.phone, rewardId, pointsCost, title);
+    if (res.success) {
+      setUserPoints(res.updatedPoints);
+      
+      const active = JSON.parse(localStorage.getItem('gdd_active_user'));
+      active.points = res.updatedPoints;
+      localStorage.setItem('gdd_active_user', JSON.stringify(active));
+      
+      setUser({ 
+        ...user, 
+        points: res.updatedPoints, 
+        claimedRewards: getUserProfile(user.phone).claimedRewards 
+      });
+    }
+    return res;
   };
 
   // Customer sub changes
@@ -319,6 +358,7 @@ export default function App() {
         phone={user ? user.phone : '+91 98765 43210'}
         activeOrder={waActiveOrder}
         activeSubscription={waActiveSubscription}
+        onTrackOrderLinkClick={setActiveTrackingOrder}
       />
 
       {/* Cart Sliding Drawer overlay */}
@@ -350,9 +390,14 @@ export default function App() {
         {user && (
           <div className="user-logged-in-bar">
             <div className="container flex-row-between">
-              <span className="flex-row-center gap-6">
+              <span 
+                className="flex-row-center gap-6" 
+                style={{ cursor: 'pointer' }}
+                onClick={() => handleSecureViewSwitch('customer')}
+                title="Click to view profile & edit details"
+              >
                 <span className="verified-tc-inline">🛡️</span>
-                <span>Logged in as **{user.name}** ({user.phone}).</span>
+                <span>Logged in as <strong>{user.name}</strong> ({user.phone}). Click to manage profile 👤</span>
                 <span className="badge badge-milk" style={{ textTransform: 'none' }}>{userPoints} Loyalty Pts</span>
               </span>
               <button onClick={handleLogout} className="btn-logout flex-row-center gap-4">
@@ -500,6 +545,10 @@ export default function App() {
               userPoints={userPoints}
               onToggleSubscription={handleToggleSub}
               onCancelSubscription={handleCancelSub}
+              user={user}
+              onClaimReward={handleClaimReward}
+              onTrackOrder={setActiveTrackingOrder}
+              onUpdateProfile={handleUpdateProfile}
             />
           </section>
         )}
@@ -548,8 +597,8 @@ export default function App() {
           onClick={() => handleSecureViewSwitch('customer')} 
           className={`mob-nav-btn ${view === 'customer' ? 'active' : ''}`}
         >
-          <Calendar size={20} />
-          <span>My Subs</span>
+          <User size={20} />
+          <span>My Profile</span>
         </button>
         <button 
           onClick={() => setView('admin')} 
@@ -559,6 +608,14 @@ export default function App() {
           <span>Admin</span>
         </button>
       </nav>
+
+      {/* Live Rider Map Tracking Overlay Portal */}
+      {activeTrackingOrder && (
+        <RiderTracker 
+          order={activeTrackingOrder}
+          onClose={() => setActiveTrackingOrder(null)}
+        />
+      )}
 
       {/* Styled Footer Segment */}
       <Footer setView={handleSecureViewSwitch} />
